@@ -1,0 +1,32 @@
+{
+  "name": "buzz-hooks",
+  "version": "0.1.0",
+  "description": "Gate-style MCP lifecycle hook servers for buzz agents: block end_turn until CI is green (ci-gate) or a human reacts in a channel (approval-gate)",
+  "type": "module",
+  "license": "Apache-2.0",
+  "repository": "github:MPIsaac-Per/buzz-hooks",
+  "bin": {
+    "buzz-ci-gate": "dist/ci-gate.js",
+    "buzz-approval-gate": "dist/approval-gate.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && vitest run",
+    "prepublishOnly": "npm run build"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  }
+}
