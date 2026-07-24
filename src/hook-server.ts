@@ -1,3 +1,4 @@
+import { appendFileSync } from "node:fs";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
@@ -24,6 +25,37 @@ function asToolResult(text: string) {
   return { content: [{ type: "text" as const, text }] };
 }
 
+/**
+ * Hook servers run as children of the agent, so their stderr is usually
+ * invisible. Set GATE_LOG=/path/to/file to append one JSON line per hook
+ * call: timestamp, hook name, latency, and the verdict.
+ */
+function logCall(hook: string, ms: number, text: string): void {
+  const path = process.env.GATE_LOG;
+  if (!path) return;
+  try {
+    appendFileSync(
+      path,
+      JSON.stringify({
+        ts: new Date().toISOString(),
+        hook,
+        ms,
+        verdict: text === "" ? "allow" : "object",
+        detail: text.slice(0, 160),
+      }) + "\n",
+    );
+  } catch {
+    // logging must never break a hook call
+  }
+}
+
+async function timed(hook: string, fn: () => Promise<string>) {
+  const started = Date.now();
+  const text = await fn();
+  logCall(hook, Date.now() - started, text);
+  return asToolResult(text);
+}
+
 export function buildHookServer(
   name: string,
   version: string,
@@ -38,7 +70,7 @@ export function buildHookServer(
         "Lifecycle hook: called by the agent before honoring end_turn. " +
         "Non-empty text objects to stopping; empty text allows it.",
     },
-    async () => asToolResult(await handlers.stop()),
+    async () => timed("_Stop", handlers.stop),
   );
 
   if (handlers.postCompact) {
@@ -50,7 +82,7 @@ export function buildHookServer(
           "Lifecycle hook: called after context compaction. Returned text " +
           "is injected into the fresh context.",
       },
-      async () => asToolResult(await postCompact()),
+      async () => timed("_PostCompact", postCompact),
     );
   }
 
