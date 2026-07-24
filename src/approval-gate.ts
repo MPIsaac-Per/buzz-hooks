@@ -15,7 +15,9 @@
  *   BUZZ_BIN            buzz-cli binary (default: "buzz")
  *   GATE_ON_ERROR       object | allow when a CLI call fails (default: object)
  */
-import { serveHooks } from "./hook-server.js";
+import { z } from "zod";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { buildHookServer } from "./hook-server.js";
 import { run, onError } from "./run.js";
 
 const CLI_BUDGET_MS = 2000; // stay inside the agent's 2.5s hook timeout
@@ -133,10 +135,57 @@ export function makeHandlers(state: State) {
 const isMain = process.argv[1]?.endsWith("approval-gate.js");
 if (isMain) {
   const state: State = { requestEventId: null, approved: false };
-  serveHooks("buzz-approval-gate", "0.1.0", makeHandlers(state)).catch(
-    (err) => {
-      console.error(`[buzz-approval-gate] fatal: ${err}`);
-      process.exit(1);
+  const server = buildHookServer(
+    "buzz-approval-gate",
+    "0.1.0",
+    makeHandlers(state),
+  );
+  // buzz-acp exposes a single MCP server slot to the agent. When this gate
+  // occupies it, the agent loses buzz-dev-mcp's shell and with it the
+  // `buzz messages send` reply path — so provide a visible reply tool here.
+  server.registerTool(
+    "send_message",
+    {
+      description:
+        "Post a message to the channel via buzz-cli. Use this to reply to " +
+        "humans. Set reply_to to an event id to answer inside its thread.",
+      inputSchema: {
+        content: z.string().describe("Message text to post"),
+        reply_to: z
+          .string()
+          .optional()
+          .describe("Optional event id (64-hex) to reply to as a thread"),
+      },
+    },
+    async (args: { content: string; reply_to?: string }) => {
+      const channel = process.env.APPROVAL_CHANNEL;
+      const content = args.content?.trim();
+      const fail = (text: string) => ({
+        content: [{ type: "text" as const, text }],
+        isError: true,
+      });
+      if (!channel) return fail("APPROVAL_CHANNEL is not set");
+      if (!content) return fail("content is required");
+      const cliArgs = ["messages", "send", "--channel", channel, "--content", content];
+      if (args.reply_to && /^[0-9a-f]{64}$/.test(args.reply_to)) {
+        cliArgs.push("--reply-to", args.reply_to);
+      }
+      const r = await run(process.env.BUZZ_BIN ?? "buzz", cliArgs, CLI_BUDGET_MS);
+      if (r.timedOut || r.code !== 0) {
+        return fail(`buzz messages send failed: ${r.stderr.slice(0, 200)}`);
+      }
+      const id = parseEventId(r.stdout);
+      return {
+        content: [
+          { type: "text" as const, text: `sent (event ${id ?? "unknown"})` },
+        ],
+      };
     },
   );
+  server
+    .connect(new StdioServerTransport())
+    .catch((err: unknown) => {
+      console.error(`[buzz-approval-gate] fatal: ${err}`);
+      process.exit(1);
+    });
 }

@@ -106,3 +106,21 @@ describe("approval-gate over stdio", () => {
     await client.close();
   });
 });
+
+describe("approval-gate send_message tool", () => {
+  it("is visible (no underscore prefix) and posts via the CLI", async () => {
+    const client = await connect("approval-gate.js", {
+      APPROVAL_CHANNEL: "11111111-2222-3333-4444-555555555555",
+      BUZZ_BIN: fakeBuzz,
+      FAKE_MODE: "buzz-pending",
+    });
+    const tools = await client.listTools();
+    expect(tools.tools.map((t) => t.name)).toContain("send_message");
+    const result = await client.callTool({
+      name: "send_message",
+      arguments: { content: "hello from the gate" },
+    });
+    expect(textOf(result)).toMatch(/^sent \(event deadbeef/);
+    await client.close();
+  });
+});

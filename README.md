@@ -61,6 +61,8 @@ APPROVAL_CHANNEL=<channel-uuid> buzz-approval-gate
 
 The server posts once per session, then checks reactions on each later `_Stop`. After context compaction, `_PostCompact` re-injects a note that the approval is still outstanding.
 
+approval-gate also exposes one visible (non-hook) tool, `send_message`, which posts to the channel via buzz-cli. buzz-acp gives the agent a single MCP server slot; when this gate occupies it, `buzz-agent` loses the shell that `buzz-dev-mcp` provides and with it its reply path, so the gate carries one. Harnesses with their own shell (Goose, Codex, Claude Code) don't need it.
+
 ## What these gates can and cannot enforce
 
 Read this before trusting a gate with anything that matters. The convention is deliberately advisory, and the agent stays sovereign:
