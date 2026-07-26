@@ -127,7 +127,7 @@ describe("approval-gate send_message tool", () => {
 
 /**
  * Regression: the servers must start when invoked through their `bin` name,
- * which is a extensionless symlink created by `npm install -g` / `npm link`.
+ * an extensionless symlink created by `npm install -g` / `npm link`.
  * The contract tests above all spawn `node dist/<file>.js` directly, so they
  * cannot catch a main-module guard that only matches the `.js` path.
  */
@@ -145,10 +145,13 @@ describe("bin-name invocation (npm install -g path)", () => {
       const link = join(dir, binName);
       symlinkSync(join(dist, distFile), link);
 
+      // Spawn through node with the symlink as argv[1]. That is the value the
+      // main-module guard reads, so it reproduces the bin-name case exactly,
+      // without depending on the exec bit (tsc does not set one; npm does).
       const client = new Client({ name: "bin-test", version: "0.0.0" });
       const transport = new StdioClientTransport({
-        command: link,
-        args: [],
+        command: process.execPath,
+        args: [link],
         env: { ...process.env, ...env } as Record<string, string>,
       });
       await client.connect(transport);
