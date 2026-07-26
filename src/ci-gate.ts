@@ -13,7 +13,7 @@
  *   GITHUB_TOKEN      token for direct REST calls (preferred over gh)
  *   GATE_ON_ERROR     object | allow when the check itself fails (default: object)
  */
-import { serveHooks } from "./hook-server.js";
+import { serveHooks, isMainModule } from "./hook-server.js";
 import { run, onError } from "./run.js";
 
 const CHECK_BUDGET_MS = 2000; // stay inside the agent's 2.5s hook timeout
@@ -92,8 +92,7 @@ async function checkOnce(): Promise<string> {
   }
 }
 
-const isMain = process.argv[1]?.endsWith("ci-gate.js");
-if (isMain) {
+if (isMainModule(import.meta.url)) {
   serveHooks("buzz-ci-gate", "0.1.0", {
     stop: checkOnce,
     postCompact: async () => {

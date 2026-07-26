@@ -124,3 +124,40 @@ describe("approval-gate send_message tool", () => {
     await client.close();
   });
 });
+
+/**
+ * Regression: the servers must start when invoked through their `bin` name,
+ * an extensionless symlink created by `npm install -g` / `npm link`.
+ * The contract tests above all spawn `node dist/<file>.js` directly, so they
+ * cannot catch a main-module guard that only matches the `.js` path.
+ */
+describe("bin-name invocation (npm install -g path)", () => {
+  const cases: Array<[string, string, Record<string, string>]> = [
+    ["buzz-approval-gate", "approval-gate.js", { APPROVAL_CHANNEL: "11111111-2222-3333-4444-555555555555", BUZZ_BIN: fakeBuzz, FAKE_MODE: "buzz-pending" }],
+    ["buzz-ci-gate", "ci-gate.js", { CI_GATE_REPO: "o/r", CI_GATE_REF: "main", CI_GATE_GH_BIN: fakeBuzz, FAKE_MODE: "gh-green" }],
+  ];
+
+  for (const [binName, distFile, env] of cases) {
+    it(`${binName} serves when spawned via its extensionless bin symlink`, async () => {
+      const { mkdtempSync, symlinkSync } = await import("node:fs");
+      const { tmpdir } = await import("node:os");
+      const dir = mkdtempSync(join(tmpdir(), "buzz-hooks-bin-"));
+      const link = join(dir, binName);
+      symlinkSync(join(dist, distFile), link);
+
+      // Spawn through node with the symlink as argv[1]. That is the value the
+      // main-module guard reads, so it reproduces the bin-name case exactly,
+      // without depending on the exec bit (tsc does not set one; npm does).
+      const client = new Client({ name: "bin-test", version: "0.0.0" });
+      const transport = new StdioClientTransport({
+        command: process.execPath,
+        args: [link],
+        env: { ...process.env, ...env } as Record<string, string>,
+      });
+      await client.connect(transport);
+      const tools = await client.listTools();
+      expect(tools.tools.map((t) => t.name)).toContain("_Stop");
+      await client.close();
+    });
+  }
+});
