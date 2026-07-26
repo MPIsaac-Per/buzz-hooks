@@ -17,7 +17,7 @@
  */
 import { z } from "zod";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { buildHookServer } from "./hook-server.js";
+import { buildHookServer, isMainModule } from "./hook-server.js";
 import { run, onError } from "./run.js";
 
 const CLI_BUDGET_MS = 2000; // stay inside the agent's 2.5s hook timeout
@@ -132,8 +132,7 @@ export function makeHandlers(state: State) {
   };
 }
 
-const isMain = process.argv[1]?.endsWith("approval-gate.js");
-if (isMain) {
+if (isMainModule(import.meta.url)) {
   const state: State = { requestEventId: null, approved: false };
   const server = buildHookServer(
     "buzz-approval-gate",

@@ -1,6 +1,27 @@
-import { appendFileSync } from "node:fs";
+import { appendFileSync, realpathSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+
+/**
+ * True when `moduleUrl` is the process entrypoint.
+ *
+ * `npm install -g` and `npm link` expose each gate through an extensionless
+ * `bin` symlink (`buzz-approval-gate`), so comparing `process.argv[1]` against
+ * a `.js` suffix silently fails there: the guard is false, the server never
+ * starts, and the process exits 0 with no output. Resolve the symlink and
+ * compare file URLs instead, which holds for `node dist/x.js`, the bin
+ * symlink, and a global install alike.
+ */
+export function isMainModule(moduleUrl: string): boolean {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return moduleUrl === pathToFileURL(realpathSync(entry)).href;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Handlers for buzz's MCP-driven lifecycle hook convention
